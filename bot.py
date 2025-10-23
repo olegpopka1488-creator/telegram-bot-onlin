@@ -1,17 +1,17 @@
-from flask import Flask, request
-from telegram import Bot, Update
-from telegram.ext import ContextTypes
 import os
-import asyncio
+from flask import Flask, request
+from telegram import Update, Bot
+from telegram.ext import Dispatcher, CommandHandler, MessageHandler, filters, CallbackContext
 
 TOKEN = "8219700801:AAFPjIFpxDlp1wZcB4B4a9cHkN5OdX9HsuU"
-bot = Bot(token=TOKEN)
+bot = Bot(TOKEN)
 app = Flask(__name__)
+dispatcher = Dispatcher(bot, None, workers=0)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Хочу большого кекса и кока клы")
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("Хочу большого кекса и кока клы")
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def echo(update: Update, context: CallbackContext):
     text = update.message.text.lower()
     if "привет" in text:
         reply = "Привет, рад тебя видеть 😎"
@@ -21,25 +21,16 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = "Пока! Ещё увидимся 👋"
     else:
         reply = f"Ты сказал: {update.message.text}"
-    await update.message.reply_text(reply)
+    update.message.reply_text(reply)
 
-@app.route(f"/{TOKEN}", methods=["POST"])
+dispatcher.add_handler(CommandHandler("start", start))
+dispatcher.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+
+@app.route("/webhook", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    asyncio.run(handle_update(update))
-    return "ok", 200
-
-async def handle_update(update: Update):
-    if update.message and update.message.text:
-        text = update.message.text.lower()
-        if text.startswith("/start"):
-            await start(update, None)
-        else:
-            await echo(update, None)
-
-@app.route("/")
-def index():
-    return "Бот работает через Render 🚀"
+    dispatcher.process_update(update)
+    return "ok"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
