@@ -27,9 +27,14 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = random.choice(replies)
     await update.message.reply_text(reply)
 
+async def sticker_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    sticker_responses = ["Хороший стикер 😎", "Классный стикер! 👍", "Люблю стикеры 😏"]
+    await update.message.reply_text(random.choice(sticker_responses))
+
 application = ApplicationBuilder().token(TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
+application.add_handler(MessageHandler(filters.STICKER, sticker_reply))
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
