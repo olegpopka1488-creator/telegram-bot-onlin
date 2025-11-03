@@ -27,7 +27,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     url = "https://telegram-bot-onlin.onrender.com"
 
-    # Запуск webhook без asyncio.run()
+    # Рабочий вариант webhook под Render
     application.run_webhook(
         listen="0.0.0.0",
         port=port,
