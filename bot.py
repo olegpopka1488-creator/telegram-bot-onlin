@@ -1,7 +1,7 @@
 import os
+import random
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-import random
 
 TOKEN = "8219700801:AAFPjIFpxDlp1wZcB4B4a9cHkN5OdX9HsuU"
 
@@ -27,21 +27,19 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(random.choice(replies))
 
 async def sticker_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Реакции на разные категории стикеров
     sticker_responses = {
         "happy": ["Весёлый стикер! 😄", "Классный смайл 😎", "Люблю позитивные стикеры! ✨"],
         "sad": ["Ой, грустно 😢", "Надеюсь, скоро станет лучше 😏", "Эх… держись! 💪"],
         "funny": ["Хаха, смешно 😆", "Лол, отличный юмор! 😂", "Я засмеялся 😹"],
         "random": ["Классный стикер! 👍", "Люблю стикеры 😏", "Интересный выбор! 🤖"]
     }
-    # Простая рандомизация
     category = random.choice(list(sticker_responses.keys()))
     await update.message.reply_text(random.choice(sticker_responses[category]))
 
 application = ApplicationBuilder().token(TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
-application.add_handler(MessageHandler(filters.UpdateType.STICKER, sticker_reply))
+application.add_handler(MessageHandler(filters.Sticker.ALL, sticker_reply))
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
