@@ -1,9 +1,13 @@
 import os
+import asyncio
 from flask import Flask, request
 from telegram import Update, Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import requests
 
 TOKEN = "8219700801:AAFPjIFpxDlp1wZcB4B4a9cHkN5OdX9HsuU"
+WEBHOOK_URL = f"https://telegram-bot-onlin.onrender.com/webhook"
+PORT = int(os.environ.get("PORT", 10000))
 
 app = Flask(__name__)
 bot = Bot(token=TOKEN)
@@ -30,13 +34,17 @@ application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    application.update_queue.put(update)
-    return "ok"
+    asyncio.create_task(application.process_update(update))
+    return "ok", 200
 
 @app.route("/", methods=["GET"])
 def index():
     return "Бот работает!", 200
 
+def set_webhook():
+    requests.post(f"https://api.telegram.org/bot{TOKEN}/setWebhook", json={"url": WEBHOOK_URL})
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    set_webhook()
+    app.run(host="0.0.0.0", port=PORT)
+
