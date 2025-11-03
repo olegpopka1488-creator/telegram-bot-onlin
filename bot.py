@@ -1,60 +1,42 @@
-import logging
+import os
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-import random
-
-logging.basicConfig(level=logging.INFO)
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 TOKEN = "8219700801:AAFPjIFpxDlp1wZcB4B4a9cHkN5OdX9HsuU"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Я живой и готов общаться 😎")
+    await update.message.reply_text("Бот запущен! Привет 😎")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip().lower()
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.lower() if update.message and update.message.text else ""
 
-    replies = {
-        "привет": [
-            "Здарова! Как дела?",
-            "Привет! Рад тебя видеть!",
-            "О, приветик 😏"
-        ],
-        "как дела": [
-            "Отлично! У тебя как?",
-            "Та норм, живу 😄",
-            "Потихоньку, главное — не грустить!"
-        ],
-        "что делаешь": [
-            "Считаю байты и думаю о смысле жизни 🤖",
-            "Жду, когда ты снова что-нибудь напишешь 😉",
-            "Работаю, как всегда!"
-        ],
-        "ты кто": [
-            "Я твой бот, братан 😎",
-            "AI с характером, приятно познакомиться!",
-            "Тот, кто всегда на связи 💬"
-        ],
-        "спасибо": [
-            "Всегда пожалуйста 🙌",
-            "Не за что, я тут для этого 😁",
-            "Без проблем!"
-        ]
-    }
+    if any(word in text for word in ["привет", "здравствуй", "хай", "ку"]):
+        reply = "Привет, рад тебя видеть 😎"
+    elif any(phrase in text for phrase in ["как дела", "что как", "как ты", "как настроение"]):
+        reply = "Всё отлично, у меня всегда всё под контролем 🤖"
+    elif any(word in text for word in ["пока", "до встречи", "бай", "свидания"]):
+        reply = "Пока! Ещё увидимся 👋"
+    elif any(word in text for word in ["спасибо", "благодарю"]):
+        reply = "Всегда пожалуйста 😉"
+    elif any(word in text for word in ["ты кто", "кто ты", "что ты"]):
+        reply = "Я твой бот-помощник, всегда на связи 🤖"
+    else:
+        reply = f"Ты сказал: {update.message.text}" if update.message else "Нет текста"
 
-    for key, variants in replies.items():
-        if text == key or text == key.capitalize():
-            await update.message.reply_text(random.choice(variants))
-            return
+    await update.message.reply_text(reply)
 
-    await update.message.reply_text("Не понял 😅 Но я учусь каждый день!")
-
-def main():
-    application = ApplicationBuilder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("Бот запущен и ждёт сообщений 🚀")
-    application.run_polling()
+application = ApplicationBuilder().token(TOKEN).build()
+application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
 
 if __name__ == "__main__":
-    main()
+    port = int(os.environ.get("PORT", 10000))
+    url = "https://telegram-bot-onlin.onrender.com"
+
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path="webhook",
+        webhook_url=f"{url}/webhook"
+    )
 
