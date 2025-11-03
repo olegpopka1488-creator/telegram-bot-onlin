@@ -1,4 +1,3 @@
-cat > bot.py <<'PY'
 import os
 from flask import Flask, request
 from telegram import Update, Bot
@@ -41,5 +40,3 @@ def index():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-PY
-
