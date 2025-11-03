@@ -31,10 +31,12 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
 
+loop = asyncio.get_event_loop()
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    asyncio.create_task(application.process_update(update))
+    asyncio.run_coroutine_threadsafe(application.process_update(update), loop)
     return "ok", 200
 
 @app.route("/", methods=["GET"])
@@ -46,5 +48,6 @@ def set_webhook():
 
 if __name__ == "__main__":
     set_webhook()
+    loop.create_task(application.initialize())
     app.run(host="0.0.0.0", port=PORT)
 
