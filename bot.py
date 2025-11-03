@@ -31,7 +31,7 @@ application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    asyncio.run(application.process_update(update))
+    asyncio.get_event_loop().create_task(application.process_update(update))
     return "ok"
 
 @app.route("/", methods=["GET"])
