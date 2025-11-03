@@ -19,22 +19,19 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = f"Ты сказал: {update.message.text}" if update.message else "Нет текста"
     await update.message.reply_text(reply)
 
-async def main():
-    application = ApplicationBuilder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
+application = ApplicationBuilder().token(TOKEN).build()
+application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
 
-    # Настройка webhook Render
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    url = f"https://telegram-bot-onlin.onrender.com"
-    await application.run_webhook(
+    url = "https://telegram-bot-onlin.onrender.com"
+
+    # Запуск webhook без asyncio.run()
+    application.run_webhook(
         listen="0.0.0.0",
         port=port,
         url_path="webhook",
         webhook_url=f"{url}/webhook"
     )
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
 
