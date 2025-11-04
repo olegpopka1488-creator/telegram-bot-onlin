@@ -1,95 +1,58 @@
 import os
-import random
 import json
+import random
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 TOKEN = "8219700801:AAFPjIFpxDlp1wZcB4B4a9cHkN5OdX9HsuU"
-
-MEMORY_FILE = "memory.json"
 FACTS_FILE = "facts_ru.json"
+MEMORY_FILE = "memory.json"
 
-try:
-    with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-        memory = json.load(f)
-except:
-    memory = {}
-
-try:
+if os.path.exists(FACTS_FILE):
     with open(FACTS_FILE, "r", encoding="utf-8") as f:
-        facts = json.load(f)
-except:
-    facts = [
-        "Медведи умеют плавать и отлично ориентируются в воде.",
-        "Бананы – это ягоды, а клубника – нет.",
-        "В России находится самое глубокое озеро в мире – Байкал.",
-        "Матрешка – традиционная русская деревянная игрушка.",
-        "Самый длинный мост в России – мост через Керченский пролив."
-    ]
+        FACTS = json.load(f)
+else:
+    FACTS = []
 
-def save_memory():
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(memory, f, ensure_ascii=False, indent=2)
-
-def analyze_text(text):
-    text = text.lower()
-    emotions = {
-        "радость": ["привет", "хай", "здравствуй", "супер", "отлично"],
-        "печаль": ["грустно", "плохо", "печально", "не могу", "уныло"],
-        "любопытство": ["что", "как", "почему", "знаешь", "расскажи"]
-    }
-    for emo, words in emotions.items():
-        if any(word in text for word in words):
-            return emo
-    return "нейтрально"
+if os.path.exists(MEMORY_FILE):
+    with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+        MEMORY = json.load(f)
+else:
+    MEMORY = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Я живой бот 🤖. Давай пообщаемся!")
+    await update.message.reply_text("Бот запущен! Привет 😎")
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
-
-    user_text = update.message.text
+    text = update.message.text.strip() if update.message and update.message.text else ""
     user_id = str(update.message.from_user.id)
+    
+    if user_id not in MEMORY:
+        MEMORY[user_id] = []
 
-    if user_id not in memory:
-        memory[user_id] = {"history": [], "learned": []}
-    memory[user_id]["history"].append(user_text)
-
-    # Автообучение: если текст новый, добавляем в список "learned"
-    if user_text not in memory[user_id]["learned"]:
-        memory[user_id]["learned"].append(user_text)
-    save_memory()
-
-    emotion = analyze_text(user_text)
+    MEMORY[user_id].append(text)
+    
+    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(MEMORY, f, ensure_ascii=False, indent=2)
 
     replies = []
-    if emotion == "радость":
-        replies = [
-            "Рад, что тебе весело 😎",
-            "Отлично, позитив заряжает! ✨",
-            "Ты в хорошем настроении, я это чувствую!"
-        ]
-    elif emotion == "печаль":
-        replies = [
-            "Не грусти, всё будет хорошо 💪",
-            "Эх… держись, я с тобой 🤖",
-            "Печаль — это нормально, но мы вместе!"
-        ]
-    elif emotion == "любопытство":
-        replies = [
-            f"Знаешь что? {random.choice(facts)}",
-            "Вот интересный факт: " + random.choice(facts),
-            "Любопытно! А вот факт: " + random.choice(facts)
-        ]
-    else:
-        # Автоответы на основе выученного
-        learned = memory[user_id]["learned"]
-        if learned:
-            replies = [f"Ранее ты сказал: {random.choice(learned)}", "Интересно 🤔", "Я тебя понял 🤖"]
+    text_lower = text.lower()
+    
+    if any(word in text_lower for word in ["привет", "здравствуй", "хай"]):
+        replies = ["Привет, рад тебя видеть 😎", "Хай! Как дела?", "Здравствуй! Рад снова тебя видеть!"]
+    elif any(word in text_lower for word in ["как дела", "как ты", "что нового"]):
+        replies = ["Всё отлично, у меня всегда хороший день 🤖", 
+                   "Отлично, спасибо что спросил 😎", 
+                   "Всё круто, готов помогать тебе!"]
+    elif any(word in text_lower for word in ["пока", "до свидания", "увидимся"]):
+        replies = ["Пока! Ещё увидимся 👋", "До встречи! ✌️", "Прощай! Надеюсь, скоро увидимся!"]
+    elif any(word in text_lower for word in ["факт", "расскажи", "интересно"]):
+        if FACTS:
+            replies = [random.choice(FACTS)]
         else:
-            replies = ["Интересно 🤔", "Я тебя понял 🤖", "Хм… расскажи ещё!"]
+            replies = ["Пока фактов нет 😏"]
+    else:
+        replies = [f"Ты сказал: {text}", "Интересно 😏", "Я тебя понял 🤖"]
 
     await update.message.reply_text(random.choice(replies))
 
