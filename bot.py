@@ -2,7 +2,7 @@ import os
 import json
 import random
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 TOKEN = "8219700801:AAFPjIFpxDlp1wZcB4B4a9cHkN5OdX9HsuU"
 FACTS_FILE = "facts_ru.json"
@@ -69,7 +69,7 @@ async def sticker_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 application = ApplicationBuilder().token(TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), chat))
-application.add_handler(MessageHandler(filters.STICKER, sticker_reply))
+application.add_handler(MessageHandler(filters.Sticker.ALL, sticker_reply))
 
 if __name__ == "__main__":
     application.run_polling()
