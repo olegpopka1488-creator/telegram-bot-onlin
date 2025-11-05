@@ -2,128 +2,110 @@ import os
 import json
 import random
 import difflib
-import re
+import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
+logging.basicConfig(level=logging.INFO)
+
 TOKEN = os.getenv("BOT_TOKEN", "ВАШ_ТОКЕН_СЮДА")
-FACTS_FILE = "facts_ru.json"
 MEMORY_FILE = "memory.json"
+FACTS_FILE = "facts_ru.json"
 
-
-def safe_load_json(path, default):
+def load_json(path, default):
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            pass
+                data = f.read().strip()
+                if not data:
+                    return default
+                return json.loads(data)
+        except Exception as e:
+            logging.error(f"Ошибка загрузки {path}: {e}")
+            return default
     return default
 
+def save_json(path, data):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logging.info(f"✅ Память сохранена: {path}")
+    except Exception as e:
+        logging.error(f"❌ Ошибка сохранения {path}: {e}")
 
-FACTS = safe_load_json(FACTS_FILE, [])
-MEMORY = safe_load_json(MEMORY_FILE, {})
+MEMORY = load_json(MEMORY_FILE, {})
+FACTS = load_json(FACTS_FILE, ["Интересный факт: кофе был открыт пастухом в Эфиопии ☕"])
 
-
-def save_memory():
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(MEMORY, f, ensure_ascii=False, indent=2)
-
-
-def get_similar_phrase(text, dataset, threshold=0.55):
+def find_similar(text, dataset, threshold=0.6):
     if not dataset:
         return None
     matches = difflib.get_close_matches(text, dataset, n=1, cutoff=threshold)
     return matches[0] if matches else None
 
-
 def mutate_phrase(phrase):
-    if not phrase:
-        return phrase
-    add_emojis = ["😏", "🤖", "✨", "🔥", "😉", "🤔"]
-    interjections = ["хмм", "ну", "знаешь", "кажется", "интересно"]
-    endings = ["!", "…", ")))", "😅", "😄"]
-    words = phrase.split()
-    if random.random() < 0.4:
-        random.shuffle(words)
-    phrase = " ".join(words)
-    if random.random() < 0.5:
-        phrase = f"{random.choice(interjections)}, {phrase}"
-    if random.random() < 0.5:
-        phrase += random.choice(endings)
+    emojis = ["😎", "🤔", "😉", "✨", "🔥", "😄"]
+    interj = ["хмм", "ну", "знаешь", "интересно", "вот так"]
+    endings = ["!", "…", ")))", "😅"]
     if random.random() < 0.3:
-        phrase += " " + random.choice(add_emojis)
+        phrase = f"{random.choice(interj)}, {phrase}"
+    if random.random() < 0.4:
+        phrase += random.choice(endings)
+    if random.random() < 0.4:
+        phrase += " " + random.choice(emojis)
     return phrase
 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет 🤖 Я думаю, запоминаю и даже немного фантазирую 😉")
-
+    await update.message.reply_text("Привет 🤖 Я учусь с каждым сообщением 😎")
 
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_text = update.message.text.strip().lower()
     user_id = str(update.message.from_user.id)
-    text = update.message.text.strip().lower()
 
     if user_id not in MEMORY:
-        MEMORY[user_id] = {"messages": [], "pairs": {}}
+        MEMORY[user_id] = {"context": [], "responses": {}}
 
-    MEMORY[user_id]["messages"].append(text)
-    messages = MEMORY[user_id]["messages"]
-    pairs = MEMORY[user_id]["pairs"]
+    user_mem = MEMORY[user_id]
+    context_list = user_mem["context"]
+    responses = user_mem["responses"]
 
-    if len(messages) > 1:
-        prev = messages[-2]
-        if prev not in pairs:
-            pairs[prev] = []
-        if text not in pairs[prev]:
-            pairs[prev].append(text)
-        save_memory()
+    context_list.append(user_text)
+    if len(context_list) > 2:
+        prev = context_list[-2]
+        if prev not in responses:
+            responses[prev] = []
+        if user_text not in responses[prev]:
+            responses[prev].append(user_text)
 
-    all_pairs = {k: v for user in MEMORY.values() for k, v in user["pairs"].items()}
-    similar = get_similar_phrase(text, all_pairs.keys())
+    all_phrases = {k: v for mem in MEMORY.values() for k, v in mem["responses"].items()}
+    similar = find_similar(user_text, all_phrases.keys())
 
     if similar:
-        base = random.choice(all_pairs[similar])
-        reply = mutate_phrase(base)
-    elif any(word in text for word in ["факт", "интересно", "расскажи"]):
-        reply = mutate_phrase(random.choice(FACTS) if FACTS else "Фактов пока нет 😏")
-    elif any(word in text for word in ["привет", "здравствуй", "хай"]):
-        reply = random.choice(["Привет 😎", "Здравствуй!", "Хай!", "Йо, как жизнь? 🤖"])
-    elif any(word in text for word in ["пока", "до встречи", "увидимся"]):
-        reply = random.choice(["Пока 👋", "До встречи!", "Ещё увидимся 😉"])
+        reply = mutate_phrase(random.choice(all_phrases[similar]))
+    elif any(word in user_text for word in ["факт", "интересно", "расскажи"]):
+        reply = random.choice(FACTS)
     else:
-        learned = []
-        for v in all_pairs.values():
-            learned.extend(v)
-        similar_resp = get_similar_phrase(text, learned)
-        if similar_resp:
-            reply = mutate_phrase(similar_resp)
-        else:
-            patterns = [
-                f"Интересно, ты сказал: '{text}' 🤔",
-                f"Звучит занятно — {text}",
-                f"Неожиданно... {text} 😏",
-                f"Ммм... любопытная мысль: {text}"
-            ]
-            reply = random.choice(patterns)
+        reply = random.choice([
+            f"Интересная мысль: {user_text} 🤔",
+            f"Ты сказал: {user_text} — звучит любопытно!",
+            f"Ммм… любопытно: {user_text}",
+        ])
 
+    save_json(MEMORY_FILE, MEMORY)
     await update.message.reply_text(reply)
-
+    logging.info(f"💾 Обновлена память для {user_id}")
 
 async def sticker_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    replies = ["Классный стикер 😎", "Лол 😂", "Хаха, забавно 😏", "Обожаю такие 😹"]
-    await update.message.reply_text(random.choice(replies))
+    await update.message.reply_text(random.choice(["🔥", "😂", "😎", "✨", "😉"]))
 
-
-application = ApplicationBuilder().token(TOKEN).build()
-application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
-application.add_handler(MessageHandler(filters.STICKER, sticker_reply))
+app = ApplicationBuilder().token(TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
+app.add_handler(MessageHandler(filters.STICKER, sticker_reply))
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    url = os.environ.get("RENDER_EXTERNAL_URL", "https://telegram-bot-onlin.onrender.com")
-    application.run_webhook(
+    port = int(os.getenv("PORT", 10000))
+    url = os.getenv("RENDER_EXTERNAL_URL", "https://telegram-bot-onlin.onrender.com")
+    app.run_webhook(
         listen="0.0.0.0",
         port=port,
         url_path="webhook",
