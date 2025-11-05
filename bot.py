@@ -15,12 +15,11 @@ else:
     FACTS = []
 
 if os.path.exists(MEMORY_FILE):
-    try:
-        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-            MEMORY = json.loads(content) if content else {}
-    except:
-        MEMORY = {}
+    with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+        try:
+            MEMORY = json.load(f)
+        except json.JSONDecodeError:
+            MEMORY = {}
 else:
     MEMORY = {}
 
@@ -72,5 +71,12 @@ application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), chat))
 application.add_handler(MessageHandler(filters.Sticker.ALL, sticker_reply))
 
 if __name__ == "__main__":
-    application.run_polling()
+    port = int(os.environ.get("PORT", 10000))
+    webhook_url = "https://telegram-bot-onlin.onrender.com"
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path="webhook",
+        webhook_url=f"{webhook_url}/webhook"
+    )
 
