@@ -1,88 +1,103 @@
 import os
 import json
 import random
+import difflib
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = "8219700801:AAFPjIFpxDlp1wZcB4B4a9cHkN5OdX9HsuU"
+TOKEN = os.getenv("BOT_TOKEN", "ВАШ_ТОКЕН_СЮДА")
 FACTS_FILE = "facts_ru.json"
 MEMORY_FILE = "memory.json"
 
 
-def load_json(file_path, default):
+def safe_load_json(file_path, default):
     if os.path.exists(file_path):
         try:
             with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                return json.loads(content) if content else default
-        except:
-            return default
+                data = json.load(f)
+                if isinstance(data, dict) or isinstance(data, list):
+                    return data
+        except json.JSONDecodeError:
+            pass
     return default
 
 
-FACTS = load_json(FACTS_FILE, [])
-MEMORY = load_json(MEMORY_FILE, {})
+FACTS = safe_load_json(FACTS_FILE, [])
+MEMORY = safe_load_json(MEMORY_FILE, {})
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Бот запущен! Привет 😎")
-
-
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip() if update.message and update.message.text else ""
-    user_id = str(update.message.from_user.id)
-
-    if user_id not in MEMORY:
-        MEMORY[user_id] = []
-
-    MEMORY[user_id].append(text)
-
+def save_memory():
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(MEMORY, f, ensure_ascii=False, indent=2)
 
-    replies = []
-    text_lower = text.lower()
 
-    if any(word in text_lower for word in ["привет", "здравствуй", "хай"]):
-        replies = ["Привет, рад тебя видеть 😎", "Хай! Как дела?", "Здравствуй! Рад снова тебя видеть!"]
-    elif any(word in text_lower for word in ["как дела", "как ты", "что нового"]):
-        replies = [
-            "Всё отлично, у меня всегда хороший день 🤖",
-            "Отлично, спасибо что спросил 😎",
-            "Всё круто, готов помогать тебе!"
-        ]
-    elif any(word in text_lower for word in ["пока", "до свидания", "увидимся"]):
-        replies = ["Пока! Ещё увидимся 👋", "До встречи! ✌️", "Прощай! Надеюсь, скоро увидимся!"]
-    elif any(word in text_lower for word in ["факт", "расскажи", "интересно"]):
-        if FACTS:
-            replies = [random.choice(FACTS)]
-        else:
-            replies = ["Пока фактов нет 😏"]
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привет, я умный бот 🤖. Учусь у твоих слов.")
+
+
+def get_similar_phrase(text, dataset, threshold=0.6):
+    if not dataset:
+        return None
+    best_match = difflib.get_close_matches(text, dataset, n=1, cutoff=threshold)
+    return best_match[0] if best_match else None
+
+
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.message.from_user.id)
+    text = update.message.text.strip().lower()
+
+    if user_id not in MEMORY:
+        MEMORY[user_id] = {"messages": [], "pairs": {}}
+
+    MEMORY[user_id]["messages"].append(text)
+
+    reply = None
+    messages = MEMORY[user_id]["messages"]
+    pairs = MEMORY[user_id]["pairs"]
+
+    if len(messages) > 1:
+        prev = messages[-2]
+        if prev not in pairs:
+            pairs[prev] = []
+        if text not in pairs[prev]:
+            pairs[prev].append(text)
+        save_memory()
+
+    all_pairs = {k: v for user in MEMORY.values() for k, v in user["pairs"].items()}
+    similar = get_similar_phrase(text, all_pairs.keys())
+
+    if similar:
+        reply = random.choice(all_pairs[similar])
+    elif any(word in text for word in ["факт", "интересно"]):
+        reply = random.choice(FACTS) if FACTS else "Фактов пока нет 😏"
+    elif any(word in text for word in ["привет", "здравствуй", "хай"]):
+        reply = random.choice(["Привет 😎", "Хай!", "Здравствуй!"])
+    elif any(word in text for word in ["пока", "до встречи", "увидимся"]):
+        reply = random.choice(["Пока 👋", "До скорого!", "Ещё увидимся!"])
     else:
-        replies = [f"Ты сказал: {text}", "Интересно 😏", "Я тебя понял 🤖"]
+        reply = random.choice([
+            f"Интересно, {text}...",
+            "Продолжай, я запоминаю 🤔",
+            "Расскажи подробнее 😏"
+        ])
 
-    await update.message.reply_text(random.choice(replies))
+    await update.message.reply_text(reply)
 
 
 async def sticker_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sticker_responses = {
-        "happy": ["Весёлый стикер! 😄", "Классный смайл 😎", "Люблю позитивные стикеры! ✨"],
-        "sad": ["Ой, грустно 😢", "Надеюсь, скоро станет лучше 😏", "Эх… держись! 💪"],
-        "funny": ["Хаха, смешно 😆", "Лол, отличный юмор! 😂", "Я засмеялся 😹"],
-        "random": ["Классный стикер! 👍", "Люблю стикеры 😏", "Интересный выбор! 🤖"]
-    }
-    category = random.choice(list(sticker_responses.keys()))
-    await update.message.reply_text(random.choice(sticker_responses[category]))
+    replies = ["Классный стикер 😎", "Хаха, прикольно 😂", "Люблю стикеры 🤖"]
+    await update.message.reply_text(random.choice(replies))
 
 
 application = ApplicationBuilder().token(TOKEN).build()
 application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
-application.add_handler(MessageHandler(filters.Sticker.ALL, sticker_reply))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+application.add_handler(MessageHandler(filters.STICKER, sticker_reply))
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    url = "https://telegram-bot-onlin.onrender.com"
+    url = os.environ.get("RENDER_EXTERNAL_URL", "https://telegram-bot-onlin.onrender.com")
 
     application.run_webhook(
         listen="0.0.0.0",
