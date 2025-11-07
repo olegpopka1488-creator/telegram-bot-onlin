@@ -67,7 +67,7 @@ async def sticker_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
-app.add_handler(MessageHandler(filters.StatusUpdate.STICKER, sticker_reply))
+app.add_handler(MessageHandler(filters.Sticker.ALL, sticker_reply))
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8443))
