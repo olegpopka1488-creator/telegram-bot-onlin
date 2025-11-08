@@ -1,80 +1,87 @@
 import os
 import json
 import random
+import re
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 TOKEN = "8219700801:AAFPjIFpxDlp1wZcB4B4a9cHkN5OdX9HsuU"
-FACTS_FILE = "facts_ru.json"
 MEMORY_FILE = "memory.json"
+MAX_MEMORY_SIZE = 50 * 1024 * 1024
 
-if os.path.exists(FACTS_FILE):
-    with open(FACTS_FILE, "r", encoding="utf-8") as f:
-        FACTS = json.load(f)
-else:
-    FACTS = []
-
-if os.path.exists(MEMORY_FILE):
-    with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+def load_memory():
+    if os.path.exists(MEMORY_FILE):
         try:
-            MEMORY = json.load(f)
-        except json.JSONDecodeError:
-            MEMORY = {}
-else:
-    MEMORY = {}
+            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+        except:
+            return {"history": [], "facts": [], "mood": "neutral"}
+    return {"history": [], "facts": [], "mood": "neutral"}
 
-def save_memory():
+def save_memory(mem):
+    data_str = json.dumps(mem, ensure_ascii=False, indent=2)
+    if len(data_str.encode("utf-8")) > MAX_MEMORY_SIZE:
+        mem["history"] = mem["history"][-10000:]
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(MEMORY, f, ensure_ascii=False, indent=2)
+        json.dump(mem, f, ensure_ascii=False, indent=2)
+
+memory = load_memory()
+
+def mood_detect(text):
+    if re.search(r"\b(плохо|грустно|печально|ужасно|тяжело)\b", text.lower()):
+        return "sad"
+    if re.search(r"\b(хорошо|супер|отлично|замечательно|рад)\b", text.lower()):
+        return "happy"
+    if re.search(r"\b(злюсь|бесит|раздражает|ненавижу)\b", text.lower()):
+        return "angry"
+    return "neutral"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Бот запущен! Я учусь на каждом сообщении 😎")
+    await update.message.reply_text("Привет! Я коллективный разум 🤖 Запоминаю всё, чему меня учат пользователи 😎")
 
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip() if update.message and update.message.text else ""
-    user_id = str(update.message.from_user.id)
+    user_text = update.message.text.strip()
 
-    if user_id not in MEMORY:
-        MEMORY[user_id] = []
-    MEMORY[user_id].append(text)
-    save_memory()
+    memory["history"].append(user_text)
+    if len(memory["history"]) > 20000:
+        memory["history"] = memory["history"][-10000:]
 
-    text_lower = text.lower()
-    replies = []
+    mood = mood_detect(user_text)
+    memory["mood"] = mood
 
-    if any(word in text_lower for word in ["привет", "здравствуй", "хай"]):
-        replies = ["Привет, рад тебя видеть 😎", "Хай! Как дела?", "Здравствуй! Рад снова тебя видеть!"]
-    elif any(word in text_lower for word in ["как дела", "как ты", "что нового"]):
-        replies = ["Всё отлично, у меня всегда хороший день 🤖",
-                   "Отлично, спасибо что спросил 😎",
-                   "Всё круто, готов помогать тебе!"]
-    elif any(word in text_lower for word in ["пока", "до свидания", "увидимся"]):
-        replies = ["Пока! Ещё увидимся 👋", "До встречи! ✌️", "Прощай! Надеюсь, скоро увидимся!"]
-    elif any(word in text_lower for word in ["факт", "расскажи", "интересно"]):
-        if FACTS:
-            replies = [random.choice(FACTS)]
-        else:
-            replies = ["Пока фактов нет 😏"]
-    else:
-        replies = [f"Ты сказал: {text}", "Интересно 😏", "Я тебя понял 🤖"]
+    reply_options = {
+        "happy": ["Классное настроение 😄", "Так держать!", "Позитив заряжает 🔥"],
+        "sad": ["Не грусти 💫", "Это пройдёт ❤️", "Держись, всё будет хорошо 😉"],
+        "angry": ["Ого, чувствуется злость 😬", "Попробуй выдохнуть 💭", "Давай остынем немного 🤖"],
+        "neutral": ["Интересно 🤔", "Понял тебя 😎", "Хмм, расскажи поподробнее 😉"]
+    }
 
-    await update.message.reply_text(random.choice(replies))
+    base_response = random.choice(reply_options[mood])
+
+    if random.random() < 0.4 and len(memory["history"]) > 5:
+        prev = random.choice(memory["history"][-5:])
+        base_response += f" Кстати, кто-то недавно говорил: “{prev}”."
+
+    await update.message.reply_text(base_response)
+    save_memory(memory)
 
 async def sticker_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sticker_responses = ["🔥", "😎", "😂", "❤️", "👍", "💪", "🤖", "✨"]
-    await update.message.reply_text(random.choice(sticker_responses))
+    await update.message.reply_text(random.choice(["🔥", "😂", "❤️", "👍", "😎", "🤖", "✨", "😉"]))
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
-app.add_handler(MessageHandler(filters.Sticker.ALL, sticker_reply))
+app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), chat))
+app.add_handler(MessageHandler(filters.ALL, sticker_reply))
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8443))
+    port = int(os.environ.get("PORT", 10000))
+    webhook_url = os.environ.get("WEBHOOK_URL", "https://telegram-bot-onlin.onrender.com")
     app.run_webhook(
         listen="0.0.0.0",
         port=port,
-        url_path=TOKEN,
-        webhook_url=f"https://telegram-bot-onlin.onrender.com/{TOKEN}"
+        url_path="webhook",
+        webhook_url=f"{webhook_url}/webhook"
     )
 
